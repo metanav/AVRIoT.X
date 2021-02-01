@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?> 
+<project>                                  
+  <executable name="dist/AWS_IOT/debug/AVRIoT.X_version1.debug.elf">                 
+    <memory name="program">              
+      <units>bytes</units>                 
+      <length>49152</length>                 
+      <used>47780</used>                     
+      <free>1372</free>                     
+    </memory>                              
+    <memory name="data">                 
+      <units>bytes</units>                 
+      <length>6144</length>                 
+      <used>4466</used>                     
+      <free>1678</free>                     
+    </memory>                              
+  </executable>                            
+</project>                                 
