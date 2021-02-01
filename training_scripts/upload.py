@@ -7,8 +7,8 @@ import logging
 import threading
 import time
 
-HMAC_KEY = "ddd3de11b2962ea92fa06bc85ca8f4a2"
-API_KEY  = "ei_0e4a98eeb47411d002a1a55c871a65184651bde6278c0a35e23ef800c334eaec"
+HMAC_KEY = "<enter your edge impulse HMAC key>"
+API_KEY  = "<enter your edge impulse API key>"
 
 # Empty signature (all zeros). HS256 gives 32 byte signature, and we encode in hex, so we need 64 characters here
 emptySignature = ''.join(['0'] * 64)
@@ -62,7 +62,7 @@ def upload(tid, files):
             },
             "signature": emptySignature,
             "payload": {
-                "device_name": "ff:ee:dd:cc:bb:aa",
+                "device_name": "<enter your device name here>",
                 "device_type": "generic",
                 "interval_ms": 15.625,
                 "sensors": [
