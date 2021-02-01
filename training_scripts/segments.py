@@ -3,7 +3,7 @@ import requests
 import logging
 import threading
 
-API_KEY  = "ei_0e4a98eeb47411d002a1a55c871a65184651bde6278c0a35e23ef800c334eaec"
+API_KEY  = "<enter your edge_impulse_api_key>"
 projectId = 16681
 
 headers = {
