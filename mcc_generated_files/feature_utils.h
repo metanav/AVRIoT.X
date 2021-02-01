@@ -12,13 +12,13 @@
 extern "C" {
 #endif
 
-float rms(float *buf, size_t len);
+float rms(int16_t *buf, size_t len);
 
-float skewness(float *buf, size_t len);
+float skewness(int16_t *buf, size_t len);
 
-float std_dev(float *buf, size_t len);
+float std_dev(int16_t *buf, size_t len);
 
-float kurtosis(float *buf, size_t len);
+float kurtosis(int16_t *buf, size_t len);
 
 #ifdef	__cplusplus
 }

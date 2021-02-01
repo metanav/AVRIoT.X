@@ -1,16 +1,62 @@
+#include <math.h>
 #include "i2c_simple_master.h"
 #include "ADXL345.h"
 
 #define ADXL345_DEVICE (0x53)    // ADXL345 device address
 #define ADXL345_TO_READ (6)      // num of bytes we are going to read each time (two bytes for each axis)
 
-ADXL345_begin() {
+void ADXL345_init() {
     status = ADXL345_OK;
     error_code = ADXL345_NO_ERROR;
 
     gains[0] = 0.00376390;
     gains[1] = 0.00376009;
     gains[2] = 0.00349265;
+    //set activity/ inactivity thresholds (0-255)
+    ADXL345_setActivityThreshold(75); //62.5mg per increment
+    ADXL345_setInactivityThreshold(75); //62.5mg per increment
+    ADXL345_setTimeInactivity(10); // how many seconds of no activity is inactive?
+
+    //look of activity movement on this axes - 1 == on; 0 == off
+    ADXL345_setActivityX(1);
+    ADXL345_setActivityY(1);
+    ADXL345_setActivityZ(1);
+
+    //look of inactivity movement on this axes - 1 == on; 0 == off
+    ADXL345_setInactivityX(1);
+    ADXL345_setInactivityY(1);
+    ADXL345_setInactivityZ(1);
+
+    //look of tap movement on this axes - 1 == on; 0 == off
+    ADXL345_setTapDetectionOnX(0);
+    ADXL345_setTapDetectionOnY(0);
+    ADXL345_setTapDetectionOnZ(1);
+
+    //set values for what is a tap, and what is a double tap (0-255)
+    ADXL345_setTapThreshold(50); //62.5mg per increment
+    ADXL345_setTapDuration(15); //625us per increment
+    ADXL345_setDoubleTapLatency(80); //1.25ms per increment
+    ADXL345_setDoubleTapWindow(200); //1.25ms per increment
+
+    //set values for what is considered freefall (0-255)
+    ADXL345_setFreeFallThreshold(7); //(5 - 9) recommended - 62.5mg per increment
+    ADXL345_setFreeFallDuration(45); //(20 - 70) recommended - 5ms per increment
+
+    //setting all interrupts to take place on int pin 1
+    //I had issues with int pin 2, was unable to reset it
+    ADXL345_setInterruptMapping(ADXL345_INT_SINGLE_TAP_BIT,   ADXL345_INT1_PIN);
+    ADXL345_setInterruptMapping(ADXL345_INT_DOUBLE_TAP_BIT,   ADXL345_INT1_PIN);
+    ADXL345_setInterruptMapping(ADXL345_INT_FREE_FALL_BIT,    ADXL345_INT1_PIN);
+    ADXL345_setInterruptMapping(ADXL345_INT_ACTIVITY_BIT,     ADXL345_INT1_PIN);
+    ADXL345_setInterruptMapping(ADXL345_INT_INACTIVITY_BIT,   ADXL345_INT1_PIN);
+
+    //register interrupt actions - 1 == on; 0 == off
+    ADXL345_setInterrupt(ADXL345_INT_SINGLE_TAP_BIT, 1);
+    ADXL345_setInterrupt(ADXL345_INT_DOUBLE_TAP_BIT, 1);
+    ADXL345_setInterrupt(ADXL345_INT_FREE_FALL_BIT,  1);
+    ADXL345_setInterrupt(ADXL345_INT_ACTIVITY_BIT,   1);
+    ADXL345_setInterrupt(ADXL345_INT_INACTIVITY_BIT, 1);
+    
 }
 
 void ADXL345_powerOn() {
@@ -25,7 +71,7 @@ void ADXL345_readAccel(int* xyz) {
     ADXL345_readXYZ(xyz, xyz + 1, xyz + 2);
 }
 void ADXL345_readXYZ(int* x, int* y, int* z) {
-    readFrom(ADXL345_DATAX0, ADXL345_TO_READ, _buff); //read the acceleration data from the ADXL345
+    ADXL345_readFrom(ADXL345_DATAX0, ADXL345_TO_READ, _buff); //read the acceleration data from the ADXL345
     *x = (short)((((unsigned short)_buff[1]) << 8) | _buff[0]);
     *y = (short)((((unsigned short)_buff[3]) << 8) | _buff[2]);
     *z = (short)((((unsigned short)_buff[5]) << 8) | _buff[4]);
@@ -36,17 +82,18 @@ void ADXL345_getAcceleration(double* xyz) {
     int xyz_int[3];
     ADXL345_readAccel(xyz_int);
     for (i = 0; i < 3; i++) {
-        xyz[i] = xyz_int[i] * gains[i];
+        xyz[i] = xyz_int[i] * gains[i] * 9.81f * 100.0;
     }
 }
 // Writes val to address register on device
 void ADXL345_writeTo(uint8_t address, uint8_t val) {
-    i2c_write1ByteRegister(MMA7660_ADDR, address, val);
+    i2c_write1ByteRegister(ADXL345_DEVICE, address, val);
 }
 
 // Reads num bytes starting from address register on device in to _buff array
-void ADXL345_readFrom(uint8_t address, int num, uint8_t _buff[]) {
-    i2c_readNBytes(address, _buff, num);
+void ADXL345_readFrom(uint8_t address, int num, uint8_t *_buff) {
+    i2c_readDataBlock(ADXL345_DEVICE,  address, _buff, num);
+
 }
 
 // Gets the range setting and return it into rangeSetting
@@ -54,7 +101,7 @@ void ADXL345_readFrom(uint8_t address, int num, uint8_t _buff[]) {
 void ADXL345_getRangeSetting(uint8_t* rangeSetting) {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_DATA_FORMAT, 1, &_b);
-    *rangeSetting = _b & B00000011;
+    *rangeSetting = _b & 0b00000011;
 }
 
 // Sets the range setting, possible values are: 2, 4, 8, 16
@@ -64,22 +111,22 @@ void ADXL345_setRangeSetting(int val) {
 
     switch (val) {
         case 2:
-            _s = B00000000;
+            _s = 0b00000000;
             break;
         case 4:
-            _s = B00000001;
+            _s = 0b00000001;
             break;
         case 8:
-            _s = B00000010;
+            _s = 0b00000010;
             break;
         case 16:
-            _s = B00000011;
+            _s = 0b00000011;
             break;
         default:
-            _s = B00000000;
+            _s = 0b00000000;
     }
     ADXL345_readFrom(ADXL345_DATA_FORMAT, 1, &_b);
-    _s |= (_b & B11101100);
+    _s |= (_b & 0b11101100);
     ADXL345_writeTo(ADXL345_DATA_FORMAT, _s);
 }
 // gets the state of the SELF_TEST bit
@@ -149,7 +196,7 @@ void ADXL345_setTapThreshold(int tapThreshold) {
 int ADXL345_getTapThreshold() {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_THRESH_TAP, 1, &_b);
-    return int (_b);
+    return (int) _b;
 }
 
 // set/get the gain for each axis in Gs / count
@@ -174,18 +221,18 @@ void ADXL345_getAxisGains(double* _gains) {
 void ADXL345_setAxisOffset(int x, int y, int z) {
     ADXL345_writeTo(ADXL345_OFSX, (uint8_t)x);
     ADXL345_writeTo(ADXL345_OFSY, (uint8_t)y);
-    ADXL345_writeTo(ADXL345_OFSZ, (uint8_t)(z);
+    ADXL345_writeTo(ADXL345_OFSZ, (uint8_t)z);
 }
 
 // Gets the OFSX, OFSY and OFSZ bytes
 void ADXL345_getAxisOffset(int* x, int* y, int* z) {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_OFSX, 1, &_b);
-    *x = int (_b);
+    *x = (int) _b;
     ADXL345_readFrom(ADXL345_OFSY, 1, &_b);
-    *y = int (_b);
+    *y = (int) _b;
     ADXL345_readFrom(ADXL345_OFSZ, 1, &_b);
-    *z = int (_b);
+    *z = (int) _b;
 }
 
 // Sets the DUR byte
@@ -203,7 +250,7 @@ void ADXL345_setTapDuration(int tapDuration) {
 int ADXL345_getTapDuration() {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_DUR, 1, &_b);
-    return int (_b);
+    return(int) _b;
 }
 
 // Sets the latency (latent register) which contains an unsigned time value
@@ -220,7 +267,7 @@ void ADXL345_setDoubleTapLatency(int doubleTapLatency) {
 int ADXL345_getDoubleTapLatency() {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_LATENT, 1, &_b);
-    return int (_b);
+    return (int) _b;
 }
 
 // Sets the Window register, which contains an unsigned time value representing
@@ -237,7 +284,7 @@ void ADXL345_setDoubleTapWindow(int doubleTapWindow) {
 int ADXL345_getDoubleTapWindow() {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_WINDOW, 1, &_b);
-    return int (_b);
+    return (int) _b;
 }
 
 // Sets the THRESH_ACT byte which holds the threshold value for detecting activity.
@@ -255,7 +302,7 @@ void ADXL345_setActivityThreshold(int activityThreshold) {
 int ADXL345_getActivityThreshold() {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_THRESH_ACT, 1, &_b);
-    return int (_b);
+    return (int) _b;
 }
 
 // Sets the THRESH_INACT byte which holds the threshold value for detecting inactivity.
@@ -273,7 +320,7 @@ void ADXL345_setInactivityThreshold(int inactivityThreshold) {
 int ADXL345_getInactivityThreshold() {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_THRESH_INACT, 1, &_b);
-    return int (_b);
+    return (int) _b;
 }
 
 // Sets the TIME_INACT register, which contains an unsigned time value representing the
@@ -290,7 +337,7 @@ void ADXL345_setTimeInactivity(int timeInactivity) {
 int ADXL345_getTimeInactivity() {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_TIME_INACT, 1, &_b);
-    return int (_b);
+    return (int) _b;
 }
 
 // Sets the THRESH_FF register which holds the threshold value, in an unsigned format, for
@@ -308,7 +355,7 @@ void ADXL345_setFreeFallThreshold(int freeFallThreshold) {
 int ADXL345_getFreeFallThreshold() {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_THRESH_FF, 1, &_b);
-    return int (_b);
+    return (int) _b;
 }
 
 // Sets the TIME_FF register, which holds an unsigned time value representing the minimum
@@ -325,7 +372,7 @@ void ADXL345_setFreeFallDuration(int freeFallDuration) {
 int ADXL345_getFreeFallDuration() {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_TIME_FF, 1, &_b);
-    return int (_b);
+    return (int) _b;
 }
 
 bool ADXL345_isActivityXEnabled() {
@@ -441,7 +488,7 @@ double ADXL345_getRate() {
     uint8_t _b;
     ADXL345_readFrom(ADXL345_BW_RATE, 1, &_b);
 
-    _b &= B00001111;
+    _b &= 0b00001111;
     return (pow(2, ((int) _b) - 6)) * 6.25;
 }
 
@@ -454,7 +501,7 @@ void ADXL345_setRate(double rate) {
     }
     if (r <= 9) {
         ADXL345_readFrom(ADXL345_BW_RATE, 1, &_b);
-        _s = (uint8_t)(r + 6) | (_b & B11110000);
+        _s = (uint8_t)(r + 6) | (_b & 0b11110000);
         ADXL345_writeTo(ADXL345_BW_RATE, _s);
     }
 }
@@ -473,9 +520,6 @@ uint8_t ADXL345_get_bw_code() {
     ADXL345_readFrom(ADXL345_BW_RATE, 1, &bw_code);
     return bw_code;
 }
-
-
-
 
 
 //Used to check if action was triggered in interrupts
@@ -506,9 +550,9 @@ uint8_t ADXL345_getInterruptSource() {
     return _b;
 }
 
-bool ADXL345_getInterruptSource(uint8_t interruptBit) {
-    return ADXL345_getRegisterBit(ADXL345_INT_SOURCE, interruptBit);
-}
+//bool ADXL345_getInterruptSource(uint8_t interruptBit) {
+//    return ADXL345_getRegisterBit(ADXL345_INT_SOURCE, interruptBit);
+//}
 
 bool ADXL345_getInterruptMapping(uint8_t interruptBit) {
     return ADXL345_getRegisterBit(ADXL345_INT_MAP, interruptBit);
@@ -554,15 +598,15 @@ void ADXL345_printAllRegister() {
     printf("0x00: ");
     ADXL345_readFrom(0x00, 1, &_b);
     print_byte(_b);
-    printf("");
+    printf("\n");
     int i;
     for (i = 29; i <= 57; i++) {
         printf("0x");
-        printf(i, HEX);
+        printf("%X",i);
         printf(": ");
         ADXL345_readFrom(i, 1, &_b);
         print_byte(_b);
-        printf("");
+        printf("\n");
     }
 }
 

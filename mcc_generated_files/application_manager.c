@@ -23,12 +23,14 @@
 #if CFG_ENABLE_CLI
 #include "cli/cli.h"
 #endif
+#include <stdint.h>
 
 
 #include "../millis.h"
 #include "../MAX30105.h"
-#include "../HeartRate.h"
-#include "../MMA7660.h"
+//#include "../HeartRate.h"
+//#include "../MMA7660.h"
+#include "../ADXL345.h"
 #include "../feature_utils.h"
 #include "../SEFR.h"
 
@@ -53,10 +55,10 @@ ATCA_STATUS retValCryptoClientSerialNumber;
 static uint8_t holdCount = 0;
 
 uint32_t MAIN_dataTask(void *payload);
-uint32_t HEART_RATE_Task();
+//uint32_t HEART_RATE_Task();
 uint32_t ACC_DATA_Task();
 timerStruct_t MAIN_dataTasksTimer = {MAIN_dataTask};
-timerStruct_t HEART_RATE_TasksTimer = {HEART_RATE_Task};
+//timerStruct_t HEART_RATE_TasksTimer = {HEART_RATE_Task};
 timerStruct_t ACC_DATA_TasksTimer = {ACC_DATA_Task};
 
 static void wifiConnectionStateChanged(uint8_t status);
@@ -85,52 +87,52 @@ uint8_t rateSpot = 0;
 uint32_t lastBeat = 0; //Time at which the last beat occurred
 float beatsPerMinute = 0.0f;
 int beatAvg = 0;
-
-uint32_t HEART_RATE_Task() {
-    uint32_t irValue = MAX30105_getIR();
-    
-    if (checkForBeat(irValue) == true) {
-        uint32_t delta = millis() - lastBeat;
-        lastBeat = millis();
-        beatsPerMinute = 60 / (delta / 1000.0);
-        if (beatsPerMinute < 255 && beatsPerMinute > 20) {
-            rates[rateSpot++] = (uint8_t) beatsPerMinute; //Store this reading in the array
-            rateSpot %= RATE_SIZE; //Wrap variable
-
-            //Take average of readings
-            beatAvg = 0;
-            for (uint8_t x = 0; x < RATE_SIZE; x++) {
-                beatAvg += rates[x];
-                printf(" [%d] ", rates[x]);
-            }
-            beatAvg /= RATE_SIZE;
-        }
-
-    }
-
-//    printf("IR = %lu, ", irValue);
-//    printf("BPM = %d, ", (int) beatsPerMinute * 100);
-//    printf("Avg BPM = %d\n", beatAvg);
-
-    if (irValue < 50000) {
-        //printf("No finger?\n");
-        beatAvg = 0;
-    }
-
-    return HEART_RATE_TASK_INTERVAL;
-}
+//
+//uint32_t HEART_RATE_Task() {
+//    uint32_t irValue = MAX30105_getIR();
+//    
+//    if (checkForBeat(irValue) == true) {
+//        uint32_t delta = millis() - lastBeat;
+//        lastBeat = millis();
+//        beatsPerMinute = 60 / (delta / 1000.0);
+//        if (beatsPerMinute < 255 && beatsPerMinute > 20) {
+//            rates[rateSpot++] = (uint8_t) beatsPerMinute; //Store this reading in the array
+//            rateSpot %= RATE_SIZE; //Wrap variable
+//
+//            //Take average of readings
+//            beatAvg = 0;
+//            for (uint8_t x = 0; x < RATE_SIZE; x++) {
+//                beatAvg += rates[x];
+//                printf(" [%d] ", rates[x]);
+//            }
+//            beatAvg /= RATE_SIZE;
+//        }
+//
+//    }
+//
+////    printf("IR = %lu, ", irValue);
+////    printf("BPM = %d, ", (int) beatsPerMinute * 100);
+////    printf("Avg BPM = %d\n", beatAvg);
+//
+//    if (irValue < 50000) {
+//        //printf("No finger?\n");
+//        beatAvg = 0;
+//    }
+//
+//    return HEART_RATE_TASK_INTERVAL;
+//}
 
 uint32_t ACC_DATA_Task() {
-    memmove(acc_buf, acc_buf + 3, (ACC_BUF_LEN - 3) * sizeof(int8_t));
+    memmove(acc_buf, acc_buf + 3, (ACC_BUF_LEN - 3) * sizeof(int16_t));
     
     double xyz[3];
     ADXL345_getAcceleration(xyz);
-    acc_buf[ACC_BUF_LEN - 3] = (uint16_t) xyz[0];
-    acc_buf[ACC_BUF_LEN - 2] = (uint16_t) xyz[1];
-    acc_buf[ACC_BUF_LEN - 1] = (uint16_t) xyz[2];
+    acc_buf[ACC_BUF_LEN - 3] = (int16_t) xyz[0];
+    acc_buf[ACC_BUF_LEN - 2] = (int16_t) xyz[1];
+    acc_buf[ACC_BUF_LEN - 1] = (int16_t) xyz[2];
     
     //MMA7660_getAccXYZ(&acc_buf[ACC_BUF_LEN - 3], &acc_buf[ACC_BUF_LEN - 2], &acc_buf[ACC_BUF_LEN - 1]);
-    printf("%d, %d,  %d\n", acc_buf[ACC_BUF_LEN - 3], acc_buf[ACC_BUF_LEN - 2], acc_buf[ACC_BUF_LEN - 1]);
+    printf("%d, %d,  %d\n", (int16_t) xyz[0], (int16_t) xyz[1], (int16_t) xyz[2]);
     return ACC_DATA_TASK_INTERVAL;
 }
 // This will get called every 1 second only while we have a valid Cloud connection
@@ -166,7 +168,7 @@ static void sendToCloud(void) {
 
     for (uint8_t i = 0; i < FEATURE_SIZE; i++) {
         printf("%d, ", features[i]*100);
-        features[i] = (features[i]*9.81f/10.0 - min[i]) / (max[i] - min[i]);  
+        features[i] = (features[i] - min[i]) / (max[i] - min[i]);  
     }
     printf("\n");
 
@@ -188,9 +190,9 @@ static void sendToCloud(void) {
 
         len = sprintf(
             json, 
-            "{\"Predicted Class\":%c,\"Average BPM\": %d}", 
-            1, //predicted_class,
-            beatAvg
+            "{\"Predicted Class\":%d,\"Average BPM\": %d}", 
+            predicted_class,
+            0//beatAvg
         );
 
 
@@ -363,12 +365,12 @@ void application_init(void) {
 //    MMA7660_init();
       ADXL345_init();
       printf("Accelerometer init [OK]\n");
-
+//
 //    if (!MAX30105_begin()) {
 //        printf("MAX30105 was not found. Please check wiring/power\n.");
 //        while (1);
 //    }
-//
+
 //    printf("Heart Rate sensor init [OK]\n");
 //
 //    MAX30105_setup(
@@ -382,8 +384,8 @@ void application_init(void) {
 //    MAX30105_setPulseAmplitudeRed(0x0A); //Turn Red LED to low to indicate sensor is running
 //    MAX30105_setPulseAmplitudeGreen(0); //Turn off Green LED
 //    printf("setup done MAX30105\n");
-//    
-//    timeout_create(&HEART_RATE_TasksTimer, HEART_RATE_TASK_INTERVAL);
+    
+      //timeout_create(&HEART_RATE_TasksTimer, HEART_RATE_TASK_INTERVAL);
       timeout_create(&ACC_DATA_TasksTimer, ACC_DATA_TASK_INTERVAL);
 }
 

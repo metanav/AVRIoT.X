@@ -93,7 +93,7 @@ bool status;           // set when error occurs
 uint8_t error_code;       // Initial state
 double gains[3];        // counts to Gs
 
-void ADXL345_begin();
+void ADXL345_init();
 void ADXL345_powerOn();
 void ADXL345_readAccel(int* xyx);
 void ADXL345_readXYZ(int* x, int* y, int* z);

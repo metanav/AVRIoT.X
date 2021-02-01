@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?> 
 <project>                                  
-  <executable name="dist/AWS_IOT/production/AVRIoT.X_version1.production.elf">                 
+  <executable name="dist/AWS_IOT/production/AVRIoT.X.production.elf">                 
     <memory name="program">              
       <units>bytes</units>                 
       <length>49152</length>                 
-      <used>45390</used>                     
-      <free>3762</free>                     
+      <used>45481</used>                     
+      <free>3671</free>                     
     </memory>                              
     <memory name="data">                 
       <units>bytes</units>                 
       <length>6144</length>                 
-      <used>3608</used>                     
-      <free>2536</free>                     
+      <used>3606</used>                     
+      <free>2538</free>                     
     </memory>                              
   </executable>                            
 </project>                                 
